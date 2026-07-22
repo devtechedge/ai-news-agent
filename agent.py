@@ -346,34 +346,45 @@ def send_telegram_message(message: str) -> bool:
         print(f"Bot Token present: {bool(TELEGRAM_BOT_TOKEN)}")
         print(f"Chat ID present: {bool(TELEGRAM_CHAT_ID)}")
         return False
-    
+
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": message,
-        "parse_mode": "Markdown"
-    }
-    
+
+    def chunk_message(text: str, limit: int = 3500) -> List[str]:
+        """Split a long message into Telegram-safe chunks."""
+        if len(text) <= limit:
+            return [text]
+
+        chunks = []
+        remaining = text
+        while remaining:
+            if len(remaining) <= limit:
+                chunks.append(remaining)
+                break
+
+            split_at = remaining.rfind("\n", 0, limit)
+            if split_at == -1 or split_at < limit * 0.5:
+                split_at = limit
+
+            chunks.append(remaining[:split_at].rstrip())
+            remaining = remaining[split_at:].lstrip()
+
+        return chunks
+
     try:
-        response = requests.post(url, json=payload, timeout=10)
-        response.raise_for_status()
+        for index, chunk in enumerate(chunk_message(message), start=1):
+            payload = {
+                "chat_id": TELEGRAM_CHAT_ID,
+                "text": chunk,
+            }
+            response = requests.post(url, json=payload, timeout=10)
+            response.raise_for_status()
+            if index > 1:
+                print(f"Telegram message chunk {index} sent successfully.")
         print("Telegram message sent successfully!")
         return True
     except Exception as e:
-        print(f"Markdown Telegram send failed, retrying without formatting: {e}")
-        try:
-            fallback_payload = {
-                "chat_id": TELEGRAM_CHAT_ID,
-                "text": message,
-            }
-            response = requests.post(url, json=fallback_payload, timeout=10)
-            response.raise_for_status()
-            print("Telegram message sent successfully without Markdown parsing.")
-            return True
-        except Exception as fallback_error:
-            print(f"Failed to send Telegram message: {fallback_error}")
-            return False
+        print(f"Failed to send Telegram message: {e}")
+        return False
 
 
 # ============================================================================
