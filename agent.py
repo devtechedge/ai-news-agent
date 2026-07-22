@@ -39,7 +39,7 @@ RSS_FEEDS = [
     "http://arxiv.org/rss/cs.AI",  # ArXiv CS.AI
     "https://www.reddit.com/r/MachineLearning/.rss?sort=new",  # Reddit ML (may need user-agent)
     "https://blog.google/technology/ai/rss/",  # Google AI Blog (updated URL)
-    "https://openai.com/index/feed/",  # OpenAI Blog (updated URL)
+    "https://openai.com/news/rss.xml",  # OpenAI News RSS feed
     "https://huggingface.co/blog/feed.xml",  # Hugging Face Blog
 ]
 
@@ -362,8 +362,19 @@ def send_telegram_message(message: str) -> bool:
         print("Telegram message sent successfully!")
         return True
     except Exception as e:
-        print(f"Failed to send Telegram message: {e}")
-        return False
+        print(f"Markdown Telegram send failed, retrying without formatting: {e}")
+        try:
+            fallback_payload = {
+                "chat_id": TELEGRAM_CHAT_ID,
+                "text": message,
+            }
+            response = requests.post(url, json=fallback_payload, timeout=10)
+            response.raise_for_status()
+            print("Telegram message sent successfully without Markdown parsing.")
+            return True
+        except Exception as fallback_error:
+            print(f"Failed to send Telegram message: {fallback_error}")
+            return False
 
 
 # ============================================================================
