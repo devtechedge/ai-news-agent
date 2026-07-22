@@ -1,0 +1,81 @@
+name: Daily AI News Agent
+
+on:
+  schedule:
+    # Runs daily at 7:30 PM UTC (19:30)
+    # Cron format: minute hour day month weekday
+    - cron: '30 19 * * *'
+  
+  # Allow manual trigger for testing
+  workflow_dispatch:
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for git operations
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      # Step 2: Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      # Step 3: Install dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      # Step 4: Configure Git user for commits
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+      
+      # Step 5: Run the AI News Agent
+      - name: Run AI News Agent
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          echo "🚀 Starting AI News Agent..."
+          echo "⏰ Current time: $(date -u)"
+          echo "📅 Scheduled for: 7:30 PM UTC daily"
+          python agent.py
+      
+      # Step 6: Commit and push updated memory file
+      - name: Commit and push memory updates
+        run: |
+          echo "💾 Checking for memory file changes..."
+          
+          if git diff --quiet memory.json; then
+            echo "✅ No changes to memory.json"
+          else
+            echo "📝 Memory file updated. Committing changes..."
+            git add memory.json
+            git commit -m "🤖 Update memory state - $(date -u '+%Y-%m-%d %H:%M UTC')"
+            git push
+            echo "✅ Memory state committed and pushed"
+          fi
+      
+      # Step 7: Handle failures gracefully
+      - name: Handle workflow failures
+        if: failure()
+        run: |
+          echo "❌ Workflow failed!"
+          echo "Check the logs above for details."
+          echo ""
+          echo "Common issues:"
+          echo "  1. Missing GitHub Secrets (GEMINI_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID)"
+          echo "  2. Gemini API rate limits exceeded"
+          echo "  3. Network connectivity issues"
+          echo "  4. Invalid RSS feed URLs"
+          exit 0  # Don't fail the workflow completely
