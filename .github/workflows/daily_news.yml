@@ -62,6 +62,7 @@ jobs:
             echo "📝 Memory file updated. Committing changes..."
             git add memory.json
             git commit -m "🤖 Update memory state - $(date -u '+%Y-%m-%d %H:%M UTC')"
+            git config --local remote.origin.url https://github.com/${{ github.repository }}.git
             git push
             echo "✅ Memory state committed and pushed"
           fi
