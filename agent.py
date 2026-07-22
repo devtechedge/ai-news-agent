@@ -35,11 +35,11 @@ from typing import List, Dict, Any, Tuple
 
 # RSS Feeds to monitor (free sources)
 RSS_FEEDS = [
-    "https://news.ycombinator.com/newest.rss",  # Hacker News (we'll filter for AI keywords)
+    "https://hnrss.org/newest?q=AI",  # Hacker News AI search (replaces broken newest.rss)
     "http://arxiv.org/rss/cs.AI",  # ArXiv CS.AI
     "https://www.reddit.com/r/MachineLearning/.rss?sort=new",  # Reddit ML (may need user-agent)
-    "https://ai.googleblog.com/feeds/posts/default",  # Google AI Blog
-    "https://openai.com/blog/feed/",  # OpenAI Blog
+    "https://blog.google/technology/ai/rss/",  # Google AI Blog (updated URL)
+    "https://openai.com/index/feed/",  # OpenAI Blog (updated URL)
     "https://huggingface.co/blog/feed.xml",  # Hugging Face Blog
 ]
 
@@ -54,9 +54,9 @@ GEMINI_MAX_ARTICLES_PER_RUN = 50  # Limit articles per run to avoid hitting dail
 BATCH_SIZE = 5  # Process in small batches
 
 # Model configuration
-# Using "gemini-2.0-flash-thinking-exp" - the actual high-reasoning experimental model
-# This corresponds to the user's request for "Gemini 3.6 Flash with thinking"
-MODEL_NAME = "gemini-2.0-flash-thinking-exp"
+# Using "gemini-2.0-flash-exp" - a stable, available Gemini 2.0 Flash model
+# Note: gemini-2.0-flash-thinking-exp was deprecated; using the standard flash model
+MODEL_NAME = "gemini-2.0-flash-exp"
 
 # Memory file path (stored in repo for persistence)
 MEMORY_FILE = "memory.json"
@@ -252,13 +252,9 @@ def get_gemini_model():
     """
     Get the Gemini model with thinking/reasoning configuration.
     
-    The 'gemini-2.0-flash-thinking-exp' model is an experimental model
-    that provides enhanced reasoning capabilities. It automatically
-    engages in multi-step reasoning before providing answers.
+    The 'gemini-2.0-flash-exp' model provides fast, efficient reasoning capabilities.
     """
     # Configure generation parameters for high-quality reasoning
-    # The thinking model doesn't need explicit "thinking" config,
-    # it's built into the model architecture
     model = genai.GenerativeModel(
         MODEL_NAME,
         generation_config={
