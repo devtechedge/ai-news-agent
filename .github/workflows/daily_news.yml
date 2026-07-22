@@ -8,6 +8,12 @@ on:
   
   # Allow manual trigger for testing
   workflow_dispatch:
+    inputs:
+      telegram_test_only:
+        description: 'Send a Telegram test message and exit'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   run-agent:
@@ -18,14 +24,14 @@ jobs:
     steps:
       # Step 1: Checkout the repository
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0  # Full history for git operations
           token: ${{ secrets.GITHUB_TOKEN }}
       
       # Step 2: Set up Python
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       
@@ -47,6 +53,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TEST_TELEGRAM_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.telegram_test_only || 'false' }}
         run: |
           echo "🚀 Starting AI News Agent..."
           echo "⏰ Current time: $(date -u)"

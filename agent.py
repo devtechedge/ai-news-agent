@@ -25,7 +25,8 @@ import time
 import hashlib
 import feedparser
 import requests
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from datetime import datetime
 from typing import List, Dict, Any, Tuple
 
@@ -54,9 +55,9 @@ GEMINI_MAX_ARTICLES_PER_RUN = 50  # Limit articles per run to avoid hitting dail
 BATCH_SIZE = 5  # Process in small batches
 
 # Model configuration
-# Using "gemini-2.0-flash-exp" - a stable, available Gemini 2.0 Flash model
-# Note: gemini-2.0-flash-thinking-exp was deprecated; using the standard flash model
-MODEL_NAME = "gemini-2.0-flash-exp"
+# Using the latest stable Gemini Flash model with high thinking for stronger summaries
+MODEL_NAME = "gemini-3.6-flash"
+THINKING_LEVEL = "high"
 
 # Memory file path (stored in repo for persistence)
 MEMORY_FILE = "memory.json"
@@ -67,6 +68,7 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 # Gemini API key (from environment)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+TEST_TELEGRAM_ONLY = os.getenv("TEST_TELEGRAM_ONLY", "false").lower() == "true"
 
 
 # ============================================================================
@@ -243,28 +245,15 @@ def initialize_gemini():
     """Initialize the Gemini client with the API key."""
     if not GEMINI_API_KEY:
         raise ValueError("GEMINI_API_KEY environment variable is not set")
-    
-    genai.configure(api_key=GEMINI_API_KEY)
-    print(f"Gemini initialized with model: {MODEL_NAME}")
+
+    print(f"Gemini initialized with model: {MODEL_NAME} (thinking: {THINKING_LEVEL})")
 
 
 def get_gemini_model():
     """
     Get the Gemini model with thinking/reasoning configuration.
-    
-    The 'gemini-2.0-flash-exp' model provides fast, efficient reasoning capabilities.
     """
-    # Configure generation parameters for high-quality reasoning
-    model = genai.GenerativeModel(
-        MODEL_NAME,
-        generation_config={
-            "temperature": 0.3,  # Lower temperature for more focused reasoning
-            "top_p": 0.8,
-            "top_k": 40,
-            "max_output_tokens": 2048,
-        }
-    )
-    return model
+    return genai.Client(api_key=GEMINI_API_KEY)
 
 
 def summarize_news_batch(articles: List[Dict[str, str]], rate_limiter: GeminiRateLimiter) -> str:
@@ -277,7 +266,7 @@ def summarize_news_batch(articles: List[Dict[str, str]], rate_limiter: GeminiRat
     if not articles:
         return ""
     
-    model = get_gemini_model()
+    client = get_gemini_model()
     
     # Format articles for the prompt
     articles_text = "\n\n".join([
@@ -328,7 +317,17 @@ Articles analyzed: {len(articles)}
 """
 
     def generate_summary():
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.3,
+                top_p=0.8,
+                top_k=40,
+                max_output_tokens=2048,
+                thinking_config=types.ThinkingConfig(thinking_level=THINKING_LEVEL),
+            ),
+        )
         return response.text
     
     # Call with rate limiting and retry logic
@@ -385,6 +384,19 @@ def main():
     print("=" * 60)
     print("🤖 LONG HORIZON AI NEWS AGENT")
     print("=" * 60)
+
+    if TEST_TELEGRAM_ONLY:
+        print("\n[TEST] Telegram-only test mode enabled.")
+        test_message = f"""🤖 AI News Agent test message
+📅 {datetime.utcnow().strftime('%A, %B %d, %Y')}
+⏰ {datetime.utcnow().strftime('%H:%M UTC')}
+
+Telegram delivery is working.
+Gemini model configured: {MODEL_NAME} with thinking level {THINKING_LEVEL}
+"""
+        send_telegram_message(test_message)
+        print("\n✅ Test message attempt complete.")
+        return
     
     # Step 1: Load memory
     print("\n[1/6] Loading memory state...")
