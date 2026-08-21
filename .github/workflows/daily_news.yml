@@ -78,16 +78,15 @@ jobs:
             echo "✅ Memory state committed and pushed"
           fi
       
-      # Step 7: Handle failures gracefully
-      - name: Handle workflow failures
+      # Step 7: Surface failures (do not swallow them — a green X with empty
+      # memory.json looks like a successful digest to a recruiter).
+      - name: Surface workflow failures
         if: failure()
         run: |
-          echo "❌ Workflow failed!"
-          echo "Check the logs above for details."
-          echo ""
+          echo "Workflow failed. Check the logs above."
           echo "Common issues:"
           echo "  1. Missing GitHub Secrets (GEMINI_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID)"
-          echo "  2. Gemini API rate limits exceeded"
-          echo "  3. Network connectivity issues"
-          echo "  4. Invalid RSS feed URLs"
-          exit 0  # Don't fail the workflow completely
+          echo "  2. Gemini API errors or rate limits"
+          echo "  3. Network / RSS feed failures"
+          echo "  4. Telegram delivery failed (memory is left unchanged on purpose)"
+          exit 1
