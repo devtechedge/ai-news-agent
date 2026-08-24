@@ -20,6 +20,10 @@ Serverless daily AI digest — GitHub Actions pulls public RSS, Gemini writes th
 
 ## Screenshots
 
+<p align="center">
+  <img src="docs/social-preview.jpg" alt="AI News Agent" width="800">
+</p>
+
 | Pipeline | Telegram brief (sample layout) |
 |----------|--------------------------------|
 | ![Pipeline](docs/screenshots/01-pipeline.png) | ![Telegram brief](docs/screenshots/02-telegram-brief.png) |
