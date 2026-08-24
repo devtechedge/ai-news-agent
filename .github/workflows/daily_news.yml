@@ -79,7 +79,7 @@ jobs:
           fi
       
       # Step 7: Surface failures (do not swallow them — a green X with empty
-      # memory.json looks like a successful digest to a recruiter).
+      # memory.json looks like a successful digest to a visitor).
       - name: Surface workflow failures
         if: failure()
         run: |
