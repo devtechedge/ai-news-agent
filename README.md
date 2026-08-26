@@ -14,7 +14,7 @@ Serverless daily AI digest — GitHub Actions pulls public RSS, Gemini writes th
 
 **[Daily workflow on GitHub Actions](https://github.com/devtechedge/ai-news-agent/actions/workflows/daily_news.yml)** — scheduled 19:30 UTC, plus manual `workflow_dispatch`.
 
-> **Status:** This is a real scheduled backend, not a client-side mock. There is **no public web UI**. Gemini reads public RSS; the executive brief is sent to a **private Telegram chat**. Fork the repo, add three Actions secrets, and the next run is yours. `memory.json` in this public copy stores article hashes only.
+> **Status:** This is a real scheduled backend, not a client-side mock. There is **no public web UI**. Gemini reads public RSS and writes one short daily brief of the important developments, sent to a **private Telegram chat**. Fork the repo, add three Actions secrets, and the next run is yours. `memory.json` in this public copy stores article hashes only.
 
 ---
 
@@ -39,8 +39,9 @@ Serverless daily AI digest — GitHub Actions pulls public RSS, Gemini writes th
 - **Zero laptop, zero bill** — GitHub Actions + Gemini free tier + Telegram Bot API
 - **Six public feeds** — HN (AI query), arXiv cs.AI, Reddit r/MachineLearning, Google AI Blog, OpenAI News, Hugging Face Blog
 - **In-repo memory** — MD5 of `title|link|source` in `memory.json` so reruns skip duplicates
-- **Rate-limit safe** — batches of 5, 10 RPM cap, exponential backoff on 429, 50-article ceiling per run
-- **Telegram chunking** — splits on newlines under the Bot API length limit
+- **Important-only brief** — Gemini keeps models, launches, landmark research, policy, and big deals; skips recaps and noise
+- **One Telegram message** — hard-capped under the Bot API length limit, never split into a thread
+- **Rate-limit safe** — one Gemini call per run, 10 RPM cap, exponential backoff on 429, 50-article candidate ceiling
 - **Fail-closed** — a Gemini or Telegram miss does **not** commit empty memory and does **not** report success
 
 ---
@@ -94,7 +95,7 @@ Schedule, feeds, and RPM caps live in `.github/workflows/daily_news.yml` and `ag
 ## How it works
 
 ```
-RSS feeds ──► filter / dedupe ──► Gemini (batched) ──► Telegram
+RSS feeds ──► filter / dedupe ──► Gemini (one brief) ──► one Telegram message
                     │                                        │
                     └──────── memory.json ◄──── commit ──────┘
 ```

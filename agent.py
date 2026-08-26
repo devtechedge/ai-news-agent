@@ -6,11 +6,10 @@ This script:
 1. Fetches AI news from multiple RSS feeds
 2. Loads memory (processed IDs) from memory.json
 3. Filters out already-processed news items
-4. Batches new items to respect Gemini API rate limits
-5. Summarizes with Gemini (MODEL_NAME) using a high thinking level
-6. Sends an executive summary to Telegram
-7. Updates memory.json with new processed IDs only after a successful summary
-8. Commits and pushes the updated memory back to the repo (done by workflow)
+4. Asks Gemini to pick only the day's important AI developments
+5. Sends one short Telegram message (never a multi-message dump)
+6. Updates memory.json with considered IDs only after a successful send
+7. Commits and pushes the updated memory back to the repo (done by workflow)
 """
 
 import os
@@ -25,9 +24,8 @@ from helpers import (
     AI_KEYWORDS,  # re-exported for callers / tests that import agent
     GeminiRateLimiter,
     cap_articles,
-    chunk_message,
     filter_ai_news,
-    make_batches,
+    fit_telegram_message,
     select_new_articles,
     unique_entries,
 )
@@ -52,8 +50,8 @@ RSS_FEEDS = [
 # Rate limiting configuration for Gemini Free Tier
 # Free tier: ~15 RPM, ~1500 RPD
 GEMINI_REQUESTS_PER_MINUTE = 10  # Conservative limit
-GEMINI_MAX_ARTICLES_PER_RUN = 50  # Limit articles per run to avoid hitting daily limits
-BATCH_SIZE = 5  # Process in small batches
+GEMINI_MAX_ARTICLES_PER_RUN = 50  # Cap the candidate pool Gemini reads
+# One Gemini call writes the whole brief; keep a limiter for 429 retries.
 
 # Model configuration
 # Using the latest stable Gemini Flash model with high thinking for stronger summaries
@@ -164,14 +162,15 @@ def get_gemini_model():
     return genai.Client(api_key=GEMINI_API_KEY)
 
 
-def summarize_news_batch(articles: List[Dict[str, str]], rate_limiter: GeminiRateLimiter) -> str:
-    """Summarize a batch of news articles using Gemini with high reasoning."""
+def summarize_daily_brief(articles: List[Dict[str, str]], rate_limiter: GeminiRateLimiter) -> str:
+    """One Gemini call: keep only important developments, one short brief."""
     if not articles:
         return ""
 
     from google.genai import types
 
     client = get_gemini_model()
+    today = datetime.utcnow().strftime("%Y-%m-%d")
 
     articles_text = "\n\n".join([
         f"Title: {article['title']}\n"
@@ -181,41 +180,26 @@ def summarize_news_batch(articles: List[Dict[str, str]], rate_limiter: GeminiRat
         for article in articles
     ])
 
-    prompt = f"""You are an expert AI research analyst. Analyze the following AI news articles and provide a concise executive summary.
+    prompt = f"""You write a daily AI news brief a busy person can finish in under a minute.
 
-YOUR TASK:
-1. Identify the most significant developments across all articles
-2. Group related stories into themes
-3. Highlight breakthrough moments, major announcements, or paradigm shifts
-4. Note any concerning trends or challenges mentioned
-5. Provide actionable insights for someone tracking the AI field
+From the articles below, keep ONLY genuinely important AI developments for {today}:
+- new models or major version drops
+- lab / product launches that change what people can actually do
+- landmark research (not every arXiv paper)
+- policy or regulation that actually binds the industry
+- large funding rounds or acquisitions
 
-NEWS ARTICLES:
+Skip recaps, listicles, rumor blogs, minor changelog notes, and duplicate coverage of the same story. Merge duplicates into one bullet.
+
+OUTPUT (plain text, no HTML, no markdown headings):
+Line 1: a short title for the day
+Then 4-8 bullets. Each bullet is one development in 1-2 sentences, then the best source URL on the next line.
+If nothing is actually important, write two sentences saying so. Do not pad with filler.
+
+Hard limit: the entire brief must be under 2800 characters.
+
+ARTICLES:
 {articles_text}
-
-OUTPUT FORMAT:
-📊 AI NEWS EXECUTIVE SUMMARY
-Date: {datetime.utcnow().strftime('%Y-%m-%d')}
-
-🔑 KEY THEMES (2-3 main topics):
-• [Theme 1]
-• [Theme 2]
-
-🚀 BREAKTHROUGH DEVELOPMENTS:
-• [Most significant announcement/breakthrough]
-• [Second most important development]
-
-📈 TRENDING TOPICS:
-• [Emerging pattern or trend]
-
-⚠️ NOTABLE CONCERNS/CHALLENGES:
-• [Any risks or challenges mentioned]
-
-💡 STRATEGIC INSIGHT:
-[One-sentence takeaway for decision-makers]
-
----
-Articles analyzed: {len(articles)}
 """
 
     def generate_summary():
@@ -224,11 +208,11 @@ Articles analyzed: {len(articles)}
             contents=prompt,
             # Gemini 3.6+ rejects temperature/top_p/top_k; thinking_level is the control.
             config=types.GenerateContentConfig(
-                max_output_tokens=2048,
+                max_output_tokens=1024,
                 thinking_config=types.ThinkingConfig(thinking_level=THINKING_LEVEL),
             ),
         )
-        return response.text
+        return (response.text or "").strip()
 
     return rate_limiter.call_with_retry(generate_summary)
 
@@ -246,17 +230,20 @@ def send_telegram_message(message: str) -> bool:
         return False
 
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload_text = fit_telegram_message(message)
+    if not payload_text:
+        print("ERROR: Telegram payload empty after trim. Skipping send.")
+        return False
+    if len((message or "").strip()) > len(payload_text):
+        print(f"Trimmed Telegram payload from {len(message)} to {len(payload_text)} chars (one message).")
 
     try:
-        for index, chunk in enumerate(chunk_message(message), start=1):
-            payload = {
-                "chat_id": TELEGRAM_CHAT_ID,
-                "text": chunk,
-            }
-            response = requests.post(url, json=payload, timeout=10)
-            response.raise_for_status()
-            if index > 1:
-                print(f"Telegram message chunk {index} sent successfully.")
+        response = requests.post(
+            url,
+            json={"chat_id": TELEGRAM_CHAT_ID, "text": payload_text},
+            timeout=10,
+        )
+        response.raise_for_status()
         print("Telegram message sent successfully!")
         return True
     except Exception as e:
@@ -309,80 +296,49 @@ Gemini model configured: {MODEL_NAME} with thinking level {THINKING_LEVEL}
         print("\nNo new articles to process. Memory left unchanged.")
         return
 
-    # Step 4: Initialize Gemini and process articles
-    print("\n[4/6] Initializing Gemini and processing articles...")
+    # Step 4: One Gemini pass over today's candidates
+    print("\n[4/6] Writing a single daily brief with Gemini...")
     initialize_gemini()
 
     rate_limiter = GeminiRateLimiter(rpm_limit=GEMINI_REQUESTS_PER_MINUTE)
-    batches = make_batches(new_articles, BATCH_SIZE)
-    summaries = []
-    summarized_ids = []
+    try:
+        brief = summarize_daily_brief(new_articles, rate_limiter)
+    except Exception as e:
+        print(f"Gemini brief failed: {e}")
+        brief = ""
 
-    for i, batch in enumerate(batches):
-        print(f"Processing batch {i+1}/{len(batches)} ({len(batch)} articles)...")
-        try:
-            summary = summarize_news_batch(batch, rate_limiter)
-            if not summary:
-                print(f"Batch {i+1} returned an empty summary; IDs not marked processed.")
-                continue
-            summaries.append(summary)
-            for article in batch:
-                summarized_ids.append(article["id"])
-        except Exception as e:
-            print(f"Error processing batch {i+1}: {e}")
-            continue
-
-    if not summaries:
-        print("\nNo summaries produced; memory left unchanged.")
+    if not brief:
+        print("\nNo brief produced; memory left unchanged.")
         raise SystemExit(1)
 
-    # Step 5: Combine summaries and format final message
-    print("\n[5/6] Formatting executive summary...")
+    considered_ids = [article["id"] for article in new_articles]
 
-    if len(summaries) == 1:
-        final_summary = summaries[0]
-    else:
-        combined = "\n\n---\n\n".join(summaries)
-        final_summary = f"""📊 COMPREHENSIVE AI NEWS SUMMARY
-Date: {datetime.utcnow().strftime('%Y-%m-%d')}
+    # Step 5: One Telegram message
+    print("\n[5/6] Formatting one Telegram message...")
+    telegram_message = f"""AI brief - {datetime.utcnow().strftime('%A, %B %d, %Y')}
 
-{combined}
-
----
-📝 Note: Summary compiled from {len(summarized_ids)} articles across multiple batches.
+{brief}
 """
 
-    telegram_message = f"""🤖 Daily AI Intelligence Brief
-📅 {datetime.utcnow().strftime('%A, %B %d, %Y')}
-⏰ {datetime.utcnow().strftime('%H:%M UTC')}
-
-{final_summary}
-
----
-📊 Articles analyzed: {len(summarized_ids)}
-🧠 Powered by {MODEL_NAME} (thinking: {THINKING_LEVEL})
-🔄 Next update: Tomorrow at 7:30 PM UTC
-"""
-
-    # Step 6: Send to Telegram
     print("\n[6/6] Sending to Telegram...")
     sent = send_telegram_message(telegram_message)
     if not sent:
         print("Telegram delivery failed; memory left unchanged so the next run retries.")
         raise SystemExit(1)
 
-    # Step 7: Save memory only after a successful brief
+    # Save memory only after a successful brief. Mark every candidate we showed
+    # Gemini so skipped noise is not re-offered tomorrow.
     print("\nUpdating memory state...")
-    processed_ids.update(summarized_ids)
+    processed_ids.update(considered_ids)
     memory["processed_ids"] = list(processed_ids)
     save_memory(memory)
 
     print("\n" + "=" * 60)
     print("AGENT RUN COMPLETE")
     print("=" * 60)
-    print(f"\nProcessed: {len(summarized_ids)} new articles")
+    print(f"\nConsidered: {len(considered_ids)} new articles")
+    print(f"Brief length: {len(brief)} chars")
     print(f"Total in memory: {len(processed_ids)} articles")
-    print(f"API calls made: ~{len(summaries)} (within rate limits)")
     print("\nMemory file updated. Commit and push via GitHub Actions.")
 
 

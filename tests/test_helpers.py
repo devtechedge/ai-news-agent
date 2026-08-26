@@ -12,6 +12,7 @@ from helpers import (
     cap_articles,
     chunk_message,
     filter_ai_news,
+    fit_telegram_message,
     generate_item_id,
     is_ai_related,
     make_batches,
@@ -114,6 +115,29 @@ def test_chunk_message_hard_splits_without_newline():
     chunks = chunk_message(text, limit=30)
     assert chunks == ["x" * 30, "x" * 30, "x" * 20]
 
+
+
+
+def test_fit_telegram_message_passthrough_and_strip():
+    assert fit_telegram_message("hello") == "hello"
+    assert fit_telegram_message("  hi  ") == "hi"
+    assert fit_telegram_message("") == ""
+    assert fit_telegram_message("   ") == ""
+
+
+def test_fit_telegram_message_trims_to_one_payload():
+    text = "alpha\n" + ("b" * 20) + "\n" + ("c" * 40)
+    fitted = fit_telegram_message(text, limit=30)
+    assert isinstance(fitted, str)
+    assert len(fitted) <= 30
+    assert "alpha" in fitted
+    assert fitted == fitted.rstrip()
+
+
+def test_fit_telegram_message_hard_cut_without_newline():
+    fitted = fit_telegram_message("x" * 80, limit=30)
+    assert fitted == "x" * 30
+    assert len(fitted) <= 30
 
 def test_rate_limiter_counts_under_cap(monkeypatch):
     slept = []
