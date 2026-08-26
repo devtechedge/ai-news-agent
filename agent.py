@@ -222,10 +222,8 @@ Articles analyzed: {len(articles)}
         response = client.models.generate_content(
             model=MODEL_NAME,
             contents=prompt,
+            # Gemini 3.6+ rejects temperature/top_p/top_k; thinking_level is the control.
             config=types.GenerateContentConfig(
-                temperature=0.3,
-                top_p=0.8,
-                top_k=40,
                 max_output_tokens=2048,
                 thinking_config=types.ThinkingConfig(thinking_level=THINKING_LEVEL),
             ),
