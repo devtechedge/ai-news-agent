@@ -1,7 +1,7 @@
 """Pure helpers for the AI news agent.
 
 No network, no Gemini, no Telegram. Kept small so unit tests can cover
-hashing, RSS keyword filters, Telegram chunking, and batching without
+hashing, RSS keyword filters, a single Telegram payload, and batching without
 secrets or the daily workflow.
 """
 
@@ -109,6 +109,23 @@ def make_batches(items: List[T], size: int) -> List[List[T]]:
     if size < 1:
         raise ValueError("batch size must be >= 1")
     return [items[i : i + size] for i in range(0, len(items), size)]
+
+
+TELEGRAM_SAFE_LIMIT = 3500
+TELEGRAM_HARD_LIMIT = 4096
+
+
+def fit_telegram_message(text: str, limit: int = TELEGRAM_SAFE_LIMIT) -> str:
+    """One Telegram payload. Trim at a newline rather than splitting into chunks."""
+    if limit < 1:
+        raise ValueError("limit must be >= 1")
+    text = (text or "").strip()
+    if len(text) <= limit:
+        return text
+    split_at = text.rfind("\n", 0, limit)
+    if split_at == -1 or split_at < limit * 0.5:
+        split_at = limit
+    return text[:split_at].rstrip()
 
 
 def chunk_message(text: str, limit: int = 3500) -> List[str]:
