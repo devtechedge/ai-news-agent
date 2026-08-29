@@ -8,6 +8,7 @@ secrets or the daily workflow.
 from __future__ import annotations
 
 import hashlib
+import re
 import time
 from typing import Callable, Dict, List, Sequence, TypeVar
 
@@ -152,8 +153,68 @@ def chunk_message(text: str, limit: int = 3500) -> List[str]:
     return chunks
 
 
+_RETRYABLE_STATUS_CODES = {408, 429, 500, 502, 503, 504}
+_RETRYABLE_STATUS_NAMES = {
+    "aborted",
+    "deadline_exceeded",
+    "internal",
+    "resource_exhausted",
+    "unavailable",
+}
+_RETRYABLE_MESSAGE = re.compile(
+    r"\b(408|429|500|502|503|504)\b"
+    r"|unavailable"
+    r"|resource[_\s]?exhausted"
+    r"|rate limit"
+    r"|high demand"
+    r"|overloaded"
+    r"|try again later"
+    r"|temporarily"
+    r"|deadline exceeded"
+    r"|timed? ?out",
+    re.IGNORECASE,
+)
+
+
+def is_retryable_gemini_error(exc: BaseException) -> bool:
+    """True for transient Gemini / HTTP errors worth backing off.
+
+    Covers the 503 UNAVAILABLE / high-demand response that failed the
+    2026-08-28 daily run, plus 429 RPM trips and other 5xx blips.
+    """
+    code = getattr(exc, "code", None)
+    if isinstance(code, str) and code.isdigit():
+        code = int(code)
+    if code in _RETRYABLE_STATUS_CODES:
+        return True
+
+    status = str(getattr(exc, "status", "") or "").strip().lower().replace(" ", "_")
+    if status in _RETRYABLE_STATUS_NAMES:
+        return True
+
+    return bool(_RETRYABLE_MESSAGE.search(str(exc)))
+
+
+def gemini_backoff_seconds(attempt: int, exc: BaseException) -> float:
+    """Exponential backoff. 503 / high-demand waits longer than a 429 RPM trip."""
+    if attempt < 0:
+        raise ValueError("attempt must be >= 0")
+    msg = str(exc).lower()
+    status = str(getattr(exc, "status", "") or "").lower()
+    if (
+        "503" in msg
+        or "unavailable" in msg
+        or "high demand" in msg
+        or "unavailable" in status
+    ):
+        base = 15
+    else:
+        base = 5
+    return float((2 ** attempt) * base)
+
+
 class GeminiRateLimiter:
-    """In-process RPM gate + exponential backoff for 429s."""
+    """In-process RPM gate + exponential backoff for transient Gemini errors."""
 
     def __init__(self, rpm_limit: int = 10) -> None:
         if rpm_limit < 1:
@@ -181,7 +242,9 @@ class GeminiRateLimiter:
         self.requests_this_minute += 1
         self.total_requests_today += 1
 
-    def call_with_retry(self, func: Callable[[], T], max_retries: int = 3) -> T:
+    def call_with_retry(self, func: Callable[[], T], max_retries: int = 5) -> T:
+        if max_retries < 1:
+            raise ValueError("max_retries must be >= 1")
         last_error: Exception | None = None
         for attempt in range(max_retries):
             try:
@@ -189,16 +252,18 @@ class GeminiRateLimiter:
                 return func()
             except Exception as exc:  # noqa: BLE001 — Gemini client raises many types
                 last_error = exc
-                error_msg = str(exc).lower()
-                if "rate limit" in error_msg or "429" in error_msg:
-                    if attempt < max_retries - 1:
-                        wait_time = (2 ** attempt) * 5
-                        print(
-                            f"Rate limit hit. Retrying in {wait_time}s... "
-                            f"(attempt {attempt + 1}/{max_retries})"
-                        )
-                        time.sleep(wait_time)
-                        continue
-                    raise RuntimeError(f"Rate limit exceeded after {max_retries} retries") from exc
-                raise
+                retryable = is_retryable_gemini_error(exc)
+                if not retryable or attempt >= max_retries - 1:
+                    if retryable:
+                        raise RuntimeError(
+                            f"Transient Gemini error after {max_retries} retries: {exc}"
+                        ) from exc
+                    raise
+                wait_time = gemini_backoff_seconds(attempt, exc)
+                print(
+                    f"Transient Gemini error ({exc}). "
+                    f"Retrying in {wait_time:.0f}s... "
+                    f"(attempt {attempt + 1}/{max_retries})"
+                )
+                time.sleep(wait_time)
         raise RuntimeError("call_with_retry exhausted retries") from last_error

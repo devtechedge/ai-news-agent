@@ -13,8 +13,10 @@ from helpers import (
     chunk_message,
     filter_ai_news,
     fit_telegram_message,
+    gemini_backoff_seconds,
     generate_item_id,
     is_ai_related,
+    is_retryable_gemini_error,
     make_batches,
     select_new_articles,
     unique_entries,
@@ -173,8 +175,86 @@ def test_rate_limiter_raises_after_exhausted_429(monkeypatch):
     def always_limited():
         raise RuntimeError("rate limit exceeded")
 
-    with pytest.raises(RuntimeError, match="Rate limit exceeded"):
+    with pytest.raises(RuntimeError, match="Transient Gemini error after 2 retries"):
         limiter.call_with_retry(always_limited, max_retries=2)
+
+
+_AUG28_503 = (
+    "503 UNAVAILABLE. {'error': {'code': 503, "
+    "'message': 'This model is currently experiencing high demand. "
+    "Spikes in demand are usually temporary. Please try again later.', "
+    "'status': 'UNAVAILABLE'}}"
+)
+
+
+def test_is_retryable_gemini_error_covers_aug28_503():
+    assert is_retryable_gemini_error(RuntimeError(_AUG28_503))
+    assert is_retryable_gemini_error(RuntimeError("429 Too Many Requests"))
+    assert is_retryable_gemini_error(RuntimeError("502 Bad Gateway"))
+    assert not is_retryable_gemini_error(RuntimeError("401 UNAUTHENTICATED"))
+    assert not is_retryable_gemini_error(RuntimeError("400 INVALID_ARGUMENT"))
+
+
+def test_is_retryable_gemini_error_reads_code_and_status_attrs():
+    err = RuntimeError("boom")
+    err.code = 503
+    err.status = "UNAVAILABLE"
+    assert is_retryable_gemini_error(err)
+
+    named = RuntimeError("gemini failed")
+    named.status = "RESOURCE_EXHAUSTED"
+    assert is_retryable_gemini_error(named)
+
+
+def test_gemini_backoff_seconds_is_longer_for_503():
+    assert gemini_backoff_seconds(0, RuntimeError("429 rate limit")) == 5
+    assert gemini_backoff_seconds(1, RuntimeError("429 rate limit")) == 10
+    assert gemini_backoff_seconds(0, RuntimeError(_AUG28_503)) == 15
+    assert gemini_backoff_seconds(1, RuntimeError(_AUG28_503)) == 30
+    assert gemini_backoff_seconds(2, RuntimeError(_AUG28_503)) == 60
+    with pytest.raises(ValueError):
+        gemini_backoff_seconds(-1, RuntimeError("429"))
+
+
+def test_rate_limiter_retries_on_503_unavailable(monkeypatch):
+    slept = []
+    monkeypatch.setattr(time, "sleep", lambda seconds: slept.append(seconds))
+    limiter = GeminiRateLimiter(rpm_limit=50)
+    calls = {"n": 0}
+
+    def flaky():
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise RuntimeError(_AUG28_503)
+        return "brief"
+
+    assert limiter.call_with_retry(flaky, max_retries=4) == "brief"
+    assert calls["n"] == 3
+    assert slept == [15, 30]
+
+
+def test_rate_limiter_does_not_retry_auth_errors(monkeypatch):
+    slept = []
+    monkeypatch.setattr(time, "sleep", lambda seconds: slept.append(seconds))
+    limiter = GeminiRateLimiter(rpm_limit=50)
+
+    def auth_fail():
+        raise RuntimeError("401 UNAUTHENTICATED. API key invalid")
+
+    with pytest.raises(RuntimeError, match="401 UNAUTHENTICATED"):
+        limiter.call_with_retry(auth_fail, max_retries=5)
+    assert slept == []
+
+
+def test_rate_limiter_raises_after_exhausted_503(monkeypatch):
+    monkeypatch.setattr(time, "sleep", lambda seconds: None)
+    limiter = GeminiRateLimiter(rpm_limit=50)
+
+    def always_unavailable():
+        raise RuntimeError(_AUG28_503)
+
+    with pytest.raises(RuntimeError, match="Transient Gemini error after 5 retries"):
+        limiter.call_with_retry(always_unavailable, max_retries=5)
 
 
 def test_ai_keywords_cover_core_models():
