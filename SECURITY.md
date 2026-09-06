@@ -1,6 +1,6 @@
 # Security Assessment — AI News Agent
 
-**Date:** 2026-08-21  
+**Date:** 2026-09-06  
 **Scope:** Secrets, outbound APIs, Telegram delivery, in-repo memory, supply chain  
 **Context:** There is **no public web UI**. The product is a scheduled GitHub Actions job that reads public RSS, calls Gemini, and posts a private Telegram brief.
 
@@ -130,3 +130,11 @@ python -m pip install -r requirements-dev.txt
 python -m compileall -q agent.py helpers.py tests
 python -m pytest
 ```
+
+## Repository visibility
+
+This repository is currently **public** for portfolio review. When the open-source
+build story is no longer needed, **the GitHub repo will go private**. Making the
+repo private reduces source disclosure; it does **not** replace strong production
+secrets, auth allow-lists, webhook signatures, or Vercel/Actions environment
+hygiene. Rotate any credential that was pasted into chat, tickets, or screenshots.
