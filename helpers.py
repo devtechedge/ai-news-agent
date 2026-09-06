@@ -1,7 +1,7 @@
 """Pure helpers for the AI news agent.
 
 No network, no Gemini, no Telegram. Kept small so unit tests can cover
-hashing, RSS keyword filters, a single Telegram payload, and batching without
+hashing, RSS keyword filters, and a single Telegram payload without
 secrets or the daily workflow.
 """
 
@@ -106,12 +106,6 @@ def cap_articles(articles: List[T], max_n: int) -> List[T]:
     return articles[:max_n]
 
 
-def make_batches(items: List[T], size: int) -> List[List[T]]:
-    if size < 1:
-        raise ValueError("batch size must be >= 1")
-    return [items[i : i + size] for i in range(0, len(items), size)]
-
-
 TELEGRAM_SAFE_LIMIT = 3500
 TELEGRAM_HARD_LIMIT = 4096
 
@@ -127,30 +121,6 @@ def fit_telegram_message(text: str, limit: int = TELEGRAM_SAFE_LIMIT) -> str:
     if split_at == -1 or split_at < limit * 0.5:
         split_at = limit
     return text[:split_at].rstrip()
-
-
-def chunk_message(text: str, limit: int = 3500) -> List[str]:
-    """Split a Telegram payload on newlines, preferring ~half-limit breaks."""
-    if limit < 1:
-        raise ValueError("limit must be >= 1")
-    if len(text) <= limit:
-        return [text]
-
-    chunks: List[str] = []
-    remaining = text
-    while remaining:
-        if len(remaining) <= limit:
-            chunks.append(remaining)
-            break
-
-        split_at = remaining.rfind("\n", 0, limit)
-        if split_at == -1 or split_at < limit * 0.5:
-            split_at = limit
-
-        chunks.append(remaining[:split_at].rstrip())
-        remaining = remaining[split_at:].lstrip()
-
-    return chunks
 
 
 _RETRYABLE_STATUS_CODES = {408, 429, 500, 502, 503, 504}

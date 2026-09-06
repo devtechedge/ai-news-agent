@@ -10,14 +10,12 @@ from helpers import (
     AI_KEYWORDS,
     GeminiRateLimiter,
     cap_articles,
-    chunk_message,
     filter_ai_news,
     fit_telegram_message,
     gemini_backoff_seconds,
     generate_item_id,
     is_ai_related,
     is_retryable_gemini_error,
-    make_batches,
     select_new_articles,
     unique_entries,
 )
@@ -88,35 +86,12 @@ def test_select_new_articles_skips_known_ids():
     assert fresh[0]["id"] == generate_item_id("B", "https://b.example/1", "HN")
 
 
-def test_cap_articles_and_batches():
+def test_cap_articles():
     items = list(range(12))
     assert cap_articles(items, 5) == [0, 1, 2, 3, 4]
     assert cap_articles(items, 0) == []
-    assert make_batches(items, 5) == [list(range(5)), list(range(5, 10)), [10, 11]]
     with pytest.raises(ValueError):
         cap_articles(items, -1)
-    with pytest.raises(ValueError):
-        make_batches(items, 0)
-
-
-def test_chunk_message_short_and_empty():
-    assert chunk_message("hello") == ["hello"]
-    assert chunk_message("") == [""]
-
-
-def test_chunk_message_prefers_newline_break():
-    text = "alpha\n" + ("b" * 20) + "\n" + ("c" * 20)
-    chunks = chunk_message(text, limit=30)
-    assert all(len(c) <= 30 for c in chunks)
-    assert len(chunks) >= 2
-    assert "alpha" in chunks[0]
-
-
-def test_chunk_message_hard_splits_without_newline():
-    text = "x" * 80
-    chunks = chunk_message(text, limit=30)
-    assert chunks == ["x" * 30, "x" * 30, "x" * 20]
-
 
 
 
