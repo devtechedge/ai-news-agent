@@ -1,4 +1,4 @@
-# Security Assessment — AI News Agent
+# Security Assessment - AI News Agent
 
 **Date:** 2026-09-06  
 **Scope:** Secrets, outbound APIs, Telegram delivery, in-repo memory, supply chain  
@@ -67,7 +67,7 @@ Public JSON of the form:
 }
 ```
 
-IDs are `md5(title|link|source)` — not URLs, not titles, not prompts, not API keys.
+IDs are `md5(title|link|source)` - not URLs, not titles, not prompts, not API keys.
 
 **v1.0.0 behaviour:** `processed_ids` is updated only after a non-empty Gemini summary **and** a successful Telegram send. Empty last-run bumps with a still-empty ID list (the previous false-green pattern) are no longer committed.
 
@@ -77,8 +77,8 @@ IDs are `md5(title|link|source)` — not URLs, not titles, not prompts, not API 
 
 | Workflow | What it is |
 |----------|------------|
-| `daily_news.yml` | **Product cron** — 19:30 UTC + `workflow_dispatch`. Needs `contents: write` to commit `memory.json` |
-| `ci.yml` | **Engineering CI** — `compileall` + pytest. No secrets. Does not call Gemini or Telegram |
+| `daily_news.yml` | **Product cron** - 19:30 UTC + `workflow_dispatch`. Needs `contents: write` to commit `memory.json` |
+| `ci.yml` | **Engineering CI** - `compileall` + pytest. No secrets. Does not call Gemini or Telegram |
 
 `daily_news.yml` used to `exit 0` on failure. That step now fails the job. CI does not run the agent (it would spend the Gemini quota and require Telegram secrets).
 

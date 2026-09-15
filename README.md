@@ -1,6 +1,6 @@
 # <img src="docs/favicon.svg" width="36" height="36" alt="" /> AI News Agent
 
-Serverless daily AI digest — GitHub Actions pulls public RSS, Gemini writes the brief, Telegram delivers it.
+Serverless daily AI digest - GitHub Actions pulls public RSS, Gemini writes the brief, Telegram delivers it.
 
 [![Live run](https://img.shields.io/badge/Live%20run-GitHub%20Actions-black?logo=githubactions&logoColor=white)](https://github.com/devtechedge/ai-news-agent/actions/workflows/daily_news.yml)
 [![Daily agent](https://github.com/devtechedge/ai-news-agent/actions/workflows/daily_news.yml/badge.svg)](https://github.com/devtechedge/ai-news-agent/actions/workflows/daily_news.yml)
@@ -12,7 +12,7 @@ Serverless daily AI digest — GitHub Actions pulls public RSS, Gemini writes th
 
 ## Live Demo
 
-**[Daily workflow on GitHub Actions](https://github.com/devtechedge/ai-news-agent/actions/workflows/daily_news.yml)** — scheduled 19:30 UTC, plus manual `workflow_dispatch`.
+**[Daily workflow on GitHub Actions](https://github.com/devtechedge/ai-news-agent/actions/workflows/daily_news.yml)** - scheduled 19:30 UTC, plus manual `workflow_dispatch`.
 
 > **Status:** This is a real scheduled backend, not a client-side mock. There is **no public web UI**. Gemini reads public RSS and writes one short daily brief of the important developments, sent to a **private Telegram chat**. Fork the repo, add three Actions secrets, and the next run is yours. `memory.json` in this public copy stores article hashes only.
 
@@ -36,13 +36,13 @@ Serverless daily AI digest — GitHub Actions pulls public RSS, Gemini writes th
 
 ## Features
 
-- **Zero laptop, zero bill** — GitHub Actions + Gemini free tier + Telegram Bot API
-- **Six public feeds** — HN (AI query), arXiv cs.AI, Reddit r/MachineLearning, Google AI Blog, OpenAI News, Hugging Face Blog
-- **In-repo memory** — MD5 of `title|link|source` in `memory.json` so reruns skip duplicates
-- **Important-only brief** — Gemini keeps models, launches, landmark research, policy, and big deals; skips recaps and noise
-- **One Telegram message** — hard-capped under the Bot API length limit, never split into a thread
-- **Rate-limit safe** — one Gemini call per run, 10 RPM cap, exponential backoff on 429, 50-article candidate ceiling
-- **Fail-closed** — a Gemini or Telegram miss does **not** commit empty memory and does **not** report success
+- **Zero laptop, zero bill** - GitHub Actions + Gemini free tier + Telegram Bot API
+- **Six public feeds** - HN (AI query), arXiv cs.AI, Reddit r/MachineLearning, Google AI Blog, OpenAI News, Hugging Face Blog
+- **In-repo memory** - MD5 of `title|link|source` in `memory.json` so reruns skip duplicates
+- **Important-only brief** - Gemini keeps models, launches, landmark research, policy, and big deals; skips recaps and noise
+- **One Telegram message** - hard-capped under the Bot API length limit, never split into a thread
+- **Rate-limit safe** - one Gemini call per run, 10 RPM cap, exponential backoff on 429, 50-article candidate ceiling
+- **Fail-closed** - a Gemini or Telegram miss does **not** commit empty memory and does **not** report success
 
 ---
 
@@ -85,7 +85,7 @@ TEST_TELEGRAM_ONLY=true python agent.py
 
 1. Create a Telegram bot via [@BotFather](https://t.me/BotFather) and note the token + chat id.
 2. Create a Gemini key in [Google AI Studio](https://aistudio.google.com/app/apikey).
-3. Repo **Settings → Secrets and variables → Actions** — add `GEMINI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
+3. Repo **Settings → Secrets and variables → Actions** - add `GEMINI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
 4. **Actions → Daily AI News Agent → Run workflow**. Cron is `30 19 * * *` (19:30 UTC).
 
 Schedule, feeds, and RPM caps live in `.github/workflows/daily_news.yml` and `agent.py`.

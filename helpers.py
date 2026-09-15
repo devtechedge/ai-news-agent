@@ -220,7 +220,7 @@ class GeminiRateLimiter:
             try:
                 self.wait_if_needed()
                 return func()
-            except Exception as exc:  # noqa: BLE001 — Gemini client raises many types
+            except Exception as exc:  # noqa: BLE001 - Gemini client raises many types
                 last_error = exc
                 retryable = is_retryable_gemini_error(exc)
                 if not retryable or attempt >= max_retries - 1:
