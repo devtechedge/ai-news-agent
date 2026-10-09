@@ -1,20 +1,18 @@
 # <img src="docs/favicon.svg" width="36" height="36" alt="" /> AI News Agent
 
-Serverless daily AI digest - GitHub Actions pulls public RSS, Gemini writes the brief, Telegram delivers it.
+Serverless daily AI digest, retired and archived - GitHub Actions pulled public RSS, Gemini wrote the brief, Telegram delivered it.
 
-[![Live run](https://img.shields.io/badge/Live%20run-GitHub%20Actions-black?logo=githubactions&logoColor=white)](https://github.com/devtechedge/ai-news-agent/actions/workflows/daily_news.yml)
-[![Daily agent](https://github.com/devtechedge/ai-news-agent/actions/workflows/daily_news.yml/badge.svg)](https://github.com/devtechedge/ai-news-agent/actions/workflows/daily_news.yml)
-[![CI](https://github.com/devtechedge/ai-news-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/devtechedge/ai-news-agent/actions/workflows/ci.yml)
+[![Status: retired](https://img.shields.io/badge/status-retired-lightgrey)](#status)
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
-## Live Demo
+## Status
 
-**[Daily workflow on GitHub Actions](https://github.com/devtechedge/ai-news-agent/actions/workflows/daily_news.yml)** - scheduled 19:30 UTC, plus manual `workflow_dispatch`.
+**Retired on 9 Oct 2026, repository archived.** The scheduled run is off and no brief is sent anywhere. The last scheduled run finished 8 Oct 2026 23:48 UTC, and its history is still browsable under [GitHub Actions](https://github.com/devtechedge/ai-news-agent/actions/workflows/daily_news.yml).
 
-> **Status:** This is a real scheduled backend, not a client-side mock. There is **no public web UI**. Gemini reads public RSS and writes one short daily brief of the important developments, sent to a **private Telegram chat**. Fork the repo, add three Actions secrets, and the next run is yours. `memory.json` in this public copy stores article hashes only.
+> This snapshot is a real serverless backend, not a client-side mock, kept as a working reference. There is **no public web UI**. Gemini read public RSS and wrote one short daily brief of the important developments, sent to a **private Telegram chat**. To run your own copy, fork the repo, add the three Actions secrets and trigger the workflow. `memory.json` in this public copy stores article hashes only.
 
 ---
 

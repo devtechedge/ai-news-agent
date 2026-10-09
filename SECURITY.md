@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-06  
 **Scope:** Secrets, outbound APIs, Telegram delivery, in-repo memory, supply chain  
-**Context:** There is **no public web UI**. The product is a scheduled GitHub Actions job that reads public RSS, calls Gemini, and posts a private Telegram brief.
+**Context:** There is **no public web UI**. The product was a scheduled GitHub Actions job that reads public RSS, calls Gemini, and posts a private Telegram brief. **Retired 9 Oct 2026 and archived**, so the schedule is off; everything below describes the pipeline as it ran and as it still stands in code.
 
 ---
 
